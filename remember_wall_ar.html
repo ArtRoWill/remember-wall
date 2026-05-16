@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Remember Wall — AR Experience</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'Georgia', serif;
+  }
+
+  #canvas-bg {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  #overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255,200,80,0.15), transparent);
+    animation: scanDown 8s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes scanDown {
+    0% { top: -2px; opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  #title-block {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 20;
+    opacity: 0;
+    animation: fadeTitle 2s ease 1.5s forwards;
+  }
+
+  @keyframes fadeTitle {
+    to { opacity: 1; }
+  }
+
+  #title-block h1 {
+    font-size: 13px;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: rgba(255,220,120,0.7);
+    font-weight: 400;
+    margin-bottom: 4px;
+  }
+
+  #title-block p {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+  }
+
+  #vignette {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 5;
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-bg">
+  <canvas id="c"></canvas>
+</div>
+
+<div id="overlay">
+  <div class="scan-line"></div>
+</div>
+
+<div id="vignette"></div>
+
+<div id="title-block">
+  <h1>Remember Wall</h1>
+  <p>Augmented Reality Experience</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H, t = 0;
+const img = new Image();
+img.src = '/mnt/user-data/uploads/remember_wall.jpg';
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// --- Particle system for brushstroke fragments ---
+const particles = [];
+const NUM_PARTICLES = 180;
+
+function makeParticle() {
+  const side = Math.random();
+  return {
+    x: Math.random() * W,
+    y: Math.random() * H,
+    vx: (Math.random() - 0.5) * 0.4,
+    vy: (Math.random() - 0.5) * 0.3 - 0.15,
+    life: Math.random(),
+    maxLife: 0.6 + Math.random() * 0.4,
+    size: 1 + Math.random() * 3,
+    opacity: 0.05 + Math.random() * 0.2,
+    hue: 30 + Math.random() * 40,
+    sat: Math.random() > 0.7 ? 60 : 0,
+    isStroke: Math.random() > 0.5,
+    angle: Math.random() * Math.PI * 2,
+    spin: (Math.random() - 0.5) * 0.02,
+    len: 20 + Math.random() * 60,
+    curvePhase: Math.random() * Math.PI * 2,
+    curveAmp: 5 + Math.random() * 15,
+  };
+}
+
+for (let i = 0; i < NUM_PARTICLES; i++) {
+  const p = makeParticle();
+  p.life = Math.random() * p.maxLife;
+  particles.push(p);
+}
+
+// --- Swirl attractors (mimic big gestural strokes in the painting) ---
+const swirls = [
+  { x: 0.7, y: 0.25, r: 0.28, speed: 0.003, dir: 1 },
+  { x: 0.15, y: 0.5,  r: 0.18, speed: 0.005, dir: -1 },
+  { x: 0.5, y: 0.8,  r: 0.22, speed: 0.004, dir: 1 },
+];
+
+// --- Chromatic aberration halos around figure area ---
+function drawFigureHalo(time) {
+  const fx = W * 0.33;
+  const fy = H * 0.45;
+  const pulseR = 0.8 + 0.07 * Math.sin(time * 0.8);
+  const r = Math.min(W, H) * 0.28 * pulseR;
+
+  for (let ring = 0; ring < 3; ring++) {
+    const rOffset = ring * 18;
+    const col = ring === 0
+      ? `rgba(255,80,30,${0.04 + 0.02 * Math.sin(time * 1.1)})`
+      : ring === 1
+      ? `rgba(255,255,255,${0.03 + 0.015 * Math.sin(time * 0.9 + 1)})`
+      : `rgba(80,180,255,${0.04 + 0.02 * Math.sin(time * 1.3 + 2)})`;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const grad = ctx.createRadialGradient(fx - ring * 2, fy, 0, fx - ring * 2, fy, r + rOffset);
+    grad.addColorStop(0, col);
+    grad.addColorStop(0.6, col);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+}
+
+// --- Dreamy flowing ribbon strokes ---
+const ribbons = Array.from({ length: 12 }, (_, i) => ({
+  phase: (i / 12) * Math.PI * 2,
+  baseX: 0.1 + 0.8 * (i / 12),
+  amp: 40 + Math.random() * 80,
+  freq: 0.003 + Math.random() * 0.004,
+  speed: 0.0008 + Math.random() * 0.001,
+  color: Math.random() > 0.6
+    ? `rgba(255,${160 + Math.floor(Math.random()*60)},${Math.floor(Math.random()*60)},`
+    : `rgba(255,255,255,`,
+  width: 0.5 + Math.random() * 1.5,
+}));
+
+function drawRibbons(time) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ribbons.forEach(rib => {
+    ctx.beginPath();
+    const startY = H * 0.05;
+    const x0 = W * rib.baseX + rib.amp * Math.sin(rib.phase + time * rib.speed * 0.5);
+    ctx.moveTo(x0, startY);
+    for (let y = startY; y < H * 0.95; y += 4) {
+      const progress = y / H;
+      const wave = rib.amp * Math.sin(rib.freq * y * 80 + time * rib.speed * 1000 + rib.phase);
+      const drift = rib.amp * 0.5 * Math.sin(time * rib.speed * 0.3 * 1000 + rib.phase * 2);
+      ctx.lineTo(W * rib.baseX + wave + drift, y);
+    }
+    const alpha = 0.04 + 0.03 * Math.sin(time * 0.7 + rib.phase);
+    ctx.strokeStyle = rib.color + alpha + ')';
+    ctx.lineWidth = rib.width;
+    ctx.stroke();
+  });
+  ctx.restore();
+}
+
+// --- Psychedelic colour wash pulses ---
+let colorPulses = [];
+function spawnColorPulse() {
+  colorPulses.push({
+    x: W * (0.2 + Math.random() * 0.6),
+    y: H * (0.2 + Math.random() * 0.6),
+    r: 0,
+    maxR: Math.min(W, H) * (0.3 + Math.random() * 0.5),
+    hue: Math.random() * 360,
+    life: 1,
+    speed: 0.008 + Math.random() * 0.01,
+  });
+}
+
+let lastPulseTime = 0;
+function drawColorPulses(time) {
+  if (time - lastPulseTime > 3.5) {
+    spawnColorPulse();
+    lastPulseTime = time;
+  }
+  colorPulses = colorPulses.filter(p => p.life > 0);
+  colorPulses.forEach(p => {
+    p.r += p.maxR * p.speed;
+    p.life -= p.speed * 0.7;
+    if (p.r > p.maxR) p.life = 0;
+    ctx.save();
+    ctx.globalCompositeOperation = 'soft-light';
+    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r);
+    grad.addColorStop(0, `hsla(${p.hue},70%,60%,${p.life * 0.18})`);
+    grad.addColorStop(0.5, `hsla(${p.hue + 40},80%,50%,${p.life * 0.1})`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  });
+}
+
+// --- Brushstroke particle update + draw ---
+function updateParticles(time) {
+  particles.forEach(p => {
+    p.life += 0.003;
+
+    // Swirl influence
+    swirls.forEach(sw => {
+      const sx = sw.x * W;
+      const sy = sw.y * H;
+      const sr = sw.r * Math.min(W, H);
+      const dx = p.x - sx;
+      const dy = p.y - sy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < sr && dist > 1) {
+        const force = (1 - dist / sr) * 0.008;
+        p.vx += (-dy / dist) * force * sw.dir;
+        p.vy += (dx / dist) * force * sw.dir;
+      }
+    });
+
+    p.vx *= 0.98;
+    p.vy *= 0.98;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.angle += p.spin;
+
+    if (p.life > p.maxLife || p.x < -50 || p.x > W + 50 || p.y < -50 || p.y > H + 50) {
+      Object.assign(p, makeParticle());
+    }
+
+    const fade = p.life < 0.1 ? p.life / 0.1 : p.life > 0.85 ? (1 - p.life) / 0.15 : 1;
+    const alpha = p.opacity * fade;
+    if (alpha <= 0) return;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = alpha;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
+
+    if (p.isStroke) {
+      ctx.beginPath();
+      const cx = p.curveAmp * Math.sin(time * 0.5 + p.curvePhase);
+      ctx.moveTo(-p.len / 2, 0);
+      ctx.quadraticCurveTo(cx, p.size * 2, p.len / 2, 0);
+      ctx.strokeStyle = p.sat > 0
+        ? `hsl(${p.hue},${p.sat}%,85%)`
+        : `rgb(220,200,170)`;
+      ctx.lineWidth = p.size * 0.4;
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+      ctx.fillStyle = p.sat > 0
+        ? `hsl(${p.hue},${p.sat}%,85%)`
+        : `rgb(210,200,180)`;
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+// --- Image drawing with psychedelic distortion ---
+let imgLoaded = false;
+img.onload = () => { imgLoaded = true; };
+
+function drawImage(time) {
+  if (!imgLoaded) return;
+
+  const scale = Math.max(W / img.width, H / img.height);
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  const dx = (W - dw) / 2;
+  const dy = (H - dh) / 2;
+
+  // Subtle breathing scale
+  const breathe = 1 + 0.012 * Math.sin(time * 0.4);
+  const cx = W / 2, cy = H / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(breathe, breathe);
+  ctx.translate(-cx, -cy);
+
+  // Base image — slightly desaturated via multiply with warm tone
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 0.92;
+  ctx.drawImage(img, dx, dy, dw, dh);
+
+  // Colour tone overlay — warm amber tint
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.globalAlpha = 0.22 + 0.06 * Math.sin(time * 0.3);
+  ctx.fillStyle = `hsl(${30 + 10 * Math.sin(time * 0.2)},60%,60%)`;
+  ctx.fillRect(dx, dy, dw, dh);
+
+  ctx.restore();
+
+  // Subtle ghost/double exposure shift
+  const ghostAmt = 3 + 2 * Math.sin(time * 0.9);
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.06 + 0.02 * Math.sin(time * 1.1);
+  ctx.translate(ghostAmt * Math.sin(time * 0.4), ghostAmt * Math.cos(time * 0.3));
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.05 + 0.015 * Math.sin(time * 0.7 + 1.5);
+  ctx.translate(-ghostAmt * 0.7 * Math.sin(time * 0.35 + 1), 0);
+  ctx.fillStyle = `rgba(30,100,255,1)`;
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.restore();
+}
+
+// --- Floating orb glows (psychedelic bubbles) ---
+const orbs = Array.from({ length: 8 }, (_, i) => ({
+  phase: (i / 8) * Math.PI * 2,
+  xBase: 0.15 + 0.7 * (i / 8),
+  yBase: 0.2 + 0.6 * Math.sin((i / 8) * Math.PI),
+  r: 30 + Math.random() * 60,
+  hue: (i * 47) % 360,
+  speed: 0.0005 + Math.random() * 0.0008,
+  amp: 40 + Math.random() * 60,
+}));
+
+function drawOrbs(time) {
+  orbs.forEach(orb => {
+    const x = W * orb.xBase + orb.amp * Math.sin(time * orb.speed * 1000 * 0.7 + orb.phase);
+    const y = H * orb.yBase + orb.amp * 0.6 * Math.cos(time * orb.speed * 1000 * 0.5 + orb.phase * 1.3);
+    const pulse = 0.7 + 0.3 * Math.sin(time * orb.speed * 1000 * 1.2 + orb.phase);
+    const r = orb.r * pulse;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad.addColorStop(0, `hsla(${orb.hue},80%,70%,0.12)`);
+    grad.addColorStop(0.5, `hsla(${orb.hue + 20},70%,55%,0.06)`);
+    grad.addColorStop(1, 'transparent');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  });
+}
+
+// --- Main loop ---
+let startTime = null;
+function loop(ts) {
+  if (!startTime) startTime = ts;
+  t = (ts - startTime) / 1000;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Dark base
+  ctx.fillStyle = '#080808';
+  ctx.fillRect(0, 0, W, H);
+
+  drawImage(t);
+  drawColorPulses(t);
+  drawOrbs(t);
+  drawRibbons(t);
+  drawFigureHalo(t);
+  updateParticles(t);
+
+  // Noise grain overlay
+  const id = ctx.createImageData(W, H);
+  const data = id.data;
+  const grainAmt = 18;
+  for (let i = 0; i < data.length; i += 4) {
+    const g = (Math.random() * 2 - 1) * grainAmt;
+    data[i] = data[i+1] = data[i+2] = 128 + g;
+    data[i+3] = 12;
+  }
+  ctx.save();
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.putImageData(id, 0, 0);
+  ctx.restore();
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
