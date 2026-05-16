@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>AR Diagnostic</title>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"></script>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<style>
+body { margin: 0; background: #000; }
+a-scene { position: fixed; inset: 0; }
+#debug { position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.9); color: #0f0; padding: 20px; font-family: monospace; font-size: 11px; z-index: 1000; max-height: 40%; overflow-y: auto; border-bottom: 2px solid #0f0; }
+.log-entry { margin: 4px 0; }
+.ok { color: #0f0; }
+.err { color: #f00; }
+.warn { color: #ff0; }
+.info { color: #0ff; }
+</style>
+</head>
+<body>
+<div id="debug"></div>
+<a-scene id="ar-scene" mindar-image="imageTargetSrc: targets.mind; autoStart: true; uiLoading: no; uiScanning: no; uiError: no;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+  <a-camera position="0 0 0" look-controls="enabled: false" cursor="fuse: false"></a-camera>
+  <a-entity mindar-image-target="targetIndex: 0">
+    <a-box position="0 0 0" scale="0.5 0.5 0.5" color="#ff0000"></a-box>
+  </a-entity>
+</a-scene>
+<script>
+const debug = document.getElementById('debug');
+const scene = document.querySelector('a-scene');
+function log(msg, type = 'info') {
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  debug.appendChild(entry);
+  debug.scrollTop = debug.scrollHeight;
+}
+log('Page loaded', 'info');
+navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+  .then(stream => {
+    log('✓ Camera access granted', 'ok');
+    stream.getTracks().forEach(t => t.stop());
+  })
+  .catch(err => {
+    log('✗ Camera denied: ' + err.message, 'err');
+  });
+fetch('targets.mind')
+  .then(r => {
+    log(r.ok ? `✓ targets.mind loaded (${r.headers.get('content-length')} bytes)` : `✗ targets.mind returned ${r.status}`, r.ok ? 'ok' : 'err');
+  })
+  .catch(err => {
+    log('✗ targets.mind fetch failed: ' + err.message, 'err');
+  });
+log(`A-Frame: ${AFRAME?.version || 'unknown'}`, 'info');
+log(`MindAR: ${typeof MINDAR !== 'undefined' ? 'yes' : 'no'}`, 'info');
+scene.addEventListener('loaded', () => { log('✓ A-Frame scene loaded', 'ok'); });
+const target = document.querySelector('[mindar-image-target]');
+if (target) {
+  target.addEventListener('targetFound', () => { log('✓ TARGET FOUND - Red box visible!', 'ok'); });
+  target.addEventListener('targetLost', () => { log('Target lost', 'warn'); });
+}
+setTimeout(() => { log('If red box appears when pointing at artwork, AR works!', 'info'); }, 2000);
+</script>
+</body>
+</html>
