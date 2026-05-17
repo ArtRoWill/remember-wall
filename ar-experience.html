@@ -16,11 +16,68 @@
 </head>
 <body>
 <div id="loading">
-  <p style="color:#f0e8d0; font-size:24px; text-transform:uppercase; margin-bottom:20px;">Remember Wall</p>
-  <div style="width:80px; height:80px; border:1px solid #888; border-radius:50%; margin:20px 0; animation:spin 1.8s infinite;"></div>
-  <p style="color:#666; font-size:12px; margin-top:30px;">Activating camera...</p>
+  <p style="color:#f0e8d0; font-size:24px; text-transform:uppercase;">Remember Wall</p>
+  <p style="color:#666; font-size:12px; margin-top:40px;">Opening camera...</p>
 </div>
 
 <video id="video" autoplay playsinline muted></video>
 
-<a-scene renderer="alpha: true;" vr-mode-ui=
+<a-scene renderer="alpha: true;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+  <a-camera position="0 0 0"></a-camera>
+  <a-plane position="0 0 -1.5" width="3.2" height="2.56" material="shader: nebula; transparent: true; side: double;"></a-plane>
+</a-scene>
+
+<script>
+AFRAME.registerShader('nebula', {
+  schema: { time: { type: 'time', is: 'uniform' } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform float time;
+    varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) { vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y); }
+    float fbm(vec2 p) { float v = 0.0; float a = 0.5; for(int i=0;i<6;i++){v+=a*noise(p);p*=2.07;a*=0.5;}return v; }
+    void main() {
+      vec2 uv = vUv;
+      float t = time * 0.001;
+      float n = fbm(uv * 2.5 + vec2(t * 0.5, t * 0.35));
+      float w = sin(uv.x * 10.0 - t * 2.0) * 0.5 + 0.5;
+      w *= sin(uv.y * 8.0 - t * 1.5) * 0.5 + 0.5;
+      float lum = n * 0.6 + w * 0.4;
+      lum = 0.1 + lum * 0.7;
+      float alpha = lum * 0.60;
+      gl_FragColor = vec4(vec3(lum), alpha);
+    }
+  `
+});
+
+const video = document.getElementById('video');
+const loading = document.getElementById('loading');
+let cameraStarted = false;
+
+function startCamera() {
+  if(cameraStarted) return;
+  cameraStarted = true;
+  
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    .then(stream => {
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        video.play().then(() => {
+          setTimeout(() => { loading.classList.add('hidden'); }, 800);
+        }).catch(e => console.log('Play:', e));
+      };
+    })
+    .catch(e => {
+      console.log('Camera error:', e);
+      loading.innerHTML = '<p style="color:#ff9999;">Camera access needed - please allow in settings</p>';
+    });
+}
+
+document.addEventListener('click', startCamera);
+document.addEventListener('touchstart', startCamera);
+window.addEventListener('load', () => { setTimeout(startCamera, 500); });
+</script>
+
+</body>
+</html>
