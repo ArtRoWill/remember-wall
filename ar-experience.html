@@ -1,673 +1,102 @@
 <!DOCTYPE html>
 <html>
 <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-          <title>Remember Wall</title>
-  <style>
-      * { margin: 0; padding: 0; }
-      body { width: 100%; height: 100vh; background: #000; font-family: Arial; }
-      #main { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; }
-      video { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; display: none; }
-      canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
-      h1 { font-size: 32px; margin-bottom: 30px; z-index: 10; }
-      button { padding: 20px 50px; font-size: 18px; background: #444; color: white; border: 1px solid #888; cursor: pointer; z-index: 10; }
-      #error { color: #ff6666; font-size: 14px; margin-top: 20px; z-index: 10; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Remember Wall</title>
+<style>
+body { margin:0; padding:0; width:100%; height:100vh; background:#000; font-family:Arial; overflow:hidden; }
+video { position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; display:none; z-index:1; }
+canvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:2; }
+#ui { position:fixed; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; color:white; text-align:center; }
+h1 { font-size:36px; margin:0 0 40px 0; }
+button { padding:20px 60px; font-size:20px; background:#333; color:white; border:1px solid #666; cursor:pointer; border-radius:5px; }
+button:active { background:#555; }
+#msg { margin-top:30px; font-size:14px; color:#999; }
+</style>
 </head>
 <body>
-        <div id="main">
-                  <h1>Remember Wall</h1>
-          <button id="btn">Open Camera</button>button>
-          <div id="error"></div>div>
-        </div>div>
-<video id="video" autoplay muted playsinline></video>video>
-<canvas id="canvas"></canvas>canvas>
+<video id="video"></video>
+<canvas id="canvas"></canvas>
+<div id="ui">
+  <h1>Remember Wall</h1>
+  <button id="btn">Open Camera</button>
+  <div id="msg"></div>
+</div>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const btn = document.getElementById('btn');
-const error = document.getElementById('error');
-const main = document.getElementById('main');
+let video = document.getElementById('video');
+let canvas = document.getElementById('canvas');
+let ctx = canvas.getContext('2d');
+let btn = document.getElementById('btn');
+let ui = document.getElementById('ui');
+let msg = document.getElementById('msg');
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
-window.addEventListener('resize', () => {
-          canvas.width = window.innerWidth;
-          canvas.height = window.innerHeight;
-});
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
 
 let animating = false;
 
-function draw() {
-          const time = Date.now() * 0.0001;
-          
-          ctx.fillStyle = '#000';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
-          const orbs = [
-                  { x: canvas.width * 0.5, y: canvas.height * 0.5, r: 200, c: '#888' },
-                  { x: canvas.width * 0.3, y: canvas.height * 0.4, r: 150, c: '#666' },
-                  { x: canvas.width * 0.7, y: canvas.height * 0.6, r: 180, c: '#777' }
-                    ];
-          
-          for (let orb of orbs) {
-                      const x = orb.x + Math.sin(time * 0.5) * 150;
-                      const y = orb.y + Math.cos(time * 0.3) * 120;
-                      const radius = orb.r * (0.7 + 0.3 * Math.sin(time * 1.2));
-                      
-                      const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
-                      grad.addColorStop(0, orb.c);
-                      grad.addColorStop(0.5, '#444');
-                      grad.addColorStop(1, '#000');
-                      
-                      ctx.fillStyle = grad;
-                      ctx.globalAlpha = 0.4 + 0.2 * Math.sin(time * 0.8);
-                      ctx.beginPath();
-                      ctx.arc(x, y, radius, 0, Math.PI * 2);
-                      ctx.fill();
-          }
-          
-          ctx.globalAlpha = 1;
-          if (animating) requestAnimationFrame(draw);
+function animate() {
+  let t = Date.now() * 0.0001;
+  
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  let orbs = [
+    {x: canvas.width * 0.5, y: canvas.height * 0.5, r: 200, c: '#888'},
+    {x: canvas.width * 0.3, y: canvas.height * 0.4, r: 150, c: '#666'},
+    {x: canvas.width * 0.7, y: canvas.height * 0.6, r: 180, c: '#777'}
+  ];
+  
+  for (let i = 0; i < orbs.length; i++) {
+    let o = orbs[i];
+    let x = o.x + Math.sin(t * 0.5) * 150;
+    let y = o.y + Math.cos(t * 0.3) * 120;
+    let rad = o.r * (0.7 + 0.3 * Math.sin(t * 1.2));
+    
+    let g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, o.c);
+    g.addColorStop(0.5, '#444');
+    g.addColorStop(1, '#000');
+    
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 0.4 + 0.2 * Math.sin(t * 0.8);
+    ctx.beginPath();
+    ctx.arc(x, y, rad, 0, 6.28);
+    ctx.fill();
+  }
+  
+  ctx.globalAlpha = 1;
+  
+  if (animating) {
+    requestAnimationFrame(animate);
+  }
 }
 
-btn.addEventListener('click', async () => {
-          btn.disabled = true;
-          btn.textContent = 'Requesting camera...';
-          
-                       try {
-                                   const stream = await navigator.mediaDevices.getUserMedia({
-                                                 video: { facingMode: 'environment' }
-                                   });
-                                   
-                                   video.srcObject = stream;
-                                   video.style.display = 'block';
-                                   main.style.display = 'none';
-                                   
-                                   animating = true;
-                                   draw();
-                       } catch (err) {
-                                   error.textContent = 'Camera error: ' + err.message;
-                                   btn.disabled = false;
-                                   btn.textContent = 'Open Camera';
-                                   console.error(err);
-                       }
-});
-</script>
-</body>
-</html>html></h1>
-</body></title>
-</head><!DOCTYPE html>
-<html>
-        <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-                  <title>Remember Wall</title>title>
-                  <style>
-                              body { margin: 0; padding: 0; width: 100vw; height: 100vh; background: #000; overflow: hidden; font-family: Arial; }
-                              #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
-                              video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-                              canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; }
-                              #ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; color: white; text-align: center; }
-                              #status { font-size: 16px; margin-bottom: 20px; }
-                              button { padding: 15px 40px; font-size: 18px; background: #333; color: white; border: 1px solid #666; border-radius: 5px; cursor: pointer; }
-                              button:hover { background: #555; }
-                            </style>
-        </head>head>
-        <body>
-                <div id="container">
-                          <video id="video" autoplay muted playsinline></video>video>
-                          <canvas id="canvas"></canvas>canvas>
-                </div>div>
-                <div id="ui">
-                          <div id="status">Tap to start camera</div>div>
-                          <button id="startBtn">Open Camera</button>button>
-                </div>div>
-
-                <script>
-                        const video = document.getElementById('video');
-                        const canvas = document.getElementById('canvas');
-                        const ctx = canvas.getContext('2d');
-                        const status = document.getElementById('status');
-                        const startBtn = document.getElementById('startBtn');
-
-                        let stream = null;
-                        let animationId = null;
-
-                        function resizeCanvas() {
-                                  canvas.width = window.innerWidth;
-                                  canvas.height = window.innerHeight;
-                        }
-                        resizeCanvas();
-                        window.addEventListener('resize', resizeCanvas);
-
-                        function drawAnimationFrame() {
-                                  // Clear with black
-                                  ctx.fillStyle = '#000';
-                                  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                                  // Draw grayscale nebula orbs
-                                  const time = Date.now() * 0.0001;
-
-                                  const orbs = [
-                                          { x: canvas.width * 0.5, y: canvas.height * 0.5, baseR: 200, color: '#999' },
-                                          { x: canvas.width * 0.3, y: canvas.height * 0.4, baseR: 150, color: '#666' },
-                                          { x: canvas.width * 0.7, y: canvas.height * 0.6, baseR: 180, color: '#777' }
-                                            ];
-
-                                  for (let orb of orbs) {
-                                              const x = orb.x + Math.sin(time * 0.5) * 150;
-                                              const y = orb.y + Math.cos(time * 0.3) * 120;
-                                              const r = orb.baseR * (0.7 + 0.3 * Math.sin(time * 1.2));
-
-                                              const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-                                              grad.addColorStop(0, orb.color);
-                                              grad.addColorStop(0.5, '#444');
-                                              grad.addColorStop(1, '#000');
-
-                                              ctx.fillStyle = grad;
-                                              ctx.globalAlpha = 0.4 + 0.2 * Math.sin(time * 0.8);
-                                              ctx.fillRect(0, 0, canvas.width, canvas.height);
-                                              ctx.beginPath();
-                                              ctx.arc(x, y, r, 0, Math.PI * 2);
-                                              ctx.fill();
-                                  }
-
-                                  ctx.globalAlpha = 1;
-                                  animationId = requestAnimationFrame(drawAnimationFrame);
-                        }
-
-                        startBtn.addEventListener('click', async () => {
-                                  try {
-                                              startBtn.style.display = 'none';
-                                              status.textContent = 'Requesting camera...';
-
-                                              stream = await navigator.mediaDevices.getUserMedia({
-                                                            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
-                                              });
-
-                                              video.srcObject = stream;
-                                              status.textContent = 'Camera active';
-
-                                              setTimeout(() => {
-                                                            status.style.display = 'none';
-                                              }, 2000);
-
-                                              drawAnimationFrame();
-                                  } catch (err) {
-                                              status.textContent = 'Camera error: ' + err.message;
-                                              startBtn.style.display = 'block';
-                                              console.error(err);
-                                  }
-                        });
-                </script>
-        </body>body>
-</html>
-</html><!DOCTYPE html>
-<html lang="en">
-<head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>Remember Wall - AR</title>
-  <style>
-      * { margin:0; padding:0; }
-      html, body { width:100%; height:100%; background:#000; overflow:hidden; }
-      #app { position:fixed; inset:0; }
-      video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; }
-      canvas { position:absolute; inset:0; width:100%; height:100%; z-index:2; }
-      #loading { position:fixed; inset:0; background:#0a0a0a; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
-      #loading.hidden { opacity:0; pointer-events:none; }
-    </style>
-</head>
-<body>
-      <div id="app">
-              <video id="video" autoplay playsinline muted></video>video>
-              <canvas id="canvas"></canvas>canvas>
-      </div>div>
-
-      <div id="loading">
-              <p style="color:#f0f0f0; font-size:28px; font-weight:bold; margin-bottom:20px;">Remember Wall</p>p>
-              <div style="width:60px; height:60px; border:2px solid #888; border-radius:50%; animation:spin 2s linear infinite;"></div>div>
-              <p style="color:#666; font-size:13px; margin-top:30px;">Opening camera...</p>p>
-              <style>@keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }</style>
-      </div>div>
-
-      <script>
-            const video = document.getElementById('video');
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            const loading = document.getElementById('loading');
-
-            // Set canvas size to window size
-            function resizeCanvas() {
-                    canvas.width = window.innerWidth;
-                    canvas.height = window.innerHeight;
-            }
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-
-            // Grayscale nebulous cloud animation
-            let time = 0;
-            let animating = false;
-
-            function drawGrayscaleNebula() {
-                    if (!animating) return;
-
-                            // Clear canvas
-                            ctx.fillStyle = '#000000';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    time += 16;
-                    const t = time * 0.0001;
-
-                    // Draw multiple large nebula orbs with grayscale colors
-                    const orbs = [
-                          { x: canvas.width * 0.5, y: canvas.height * 0.5, baseR: 250, color: '#cccccc', speedX: 0.3, speedY: 0.2 },
-                          { x: canvas.width * 0.2, y: canvas.height * 0.3, baseR: 180, color: '#888888', speedX: -0.4, speedY: 0.35 },
-                          { x: canvas.width * 0.8, y: canvas.height * 0.7, baseR: 200, color: '#aaaaaa', speedX: 0.25, speedY: -0.3 }
-                            ];
-
-                    for (let orb of orbs) {
-                              // Animate position
-                              const x = orb.x + Math.sin(t * orb.speedX) * 200;
-                              const y = orb.y + Math.cos(t * orb.speedY) * 150;
-
-                              // Pulsing radius
-                              const r = orb.baseR * (0.6 + 0.4 * Math.sin(t * 1.5));
-
-                              // Draw radial gradient nebula
-                              const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-                              grad.addColorStop(0, orb.color);
-                              grad.addColorStop(0.5, '#555555');
-                              grad.addColorStop(1, '#00000000');
-
-                              ctx.fillStyle = grad;
-                              ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 0.8);
-                              ctx.beginPath();
-                              ctx.arc(x, y, r, 0, Math.PI * 2);
-                              ctx.fill();
-                    }
-
-                    ctx.globalAlpha = 1;
-
-                    // Draw swirling cloud wisps
-                    ctx.strokeStyle = '#666666';
-                    ctx.lineWidth = 40;
-                    ctx.lineCap = 'round';
-                    ctx.lineJoin = 'round';
-                    ctx.globalAlpha = 0.3;
-
-                    for (let i = 0; i < 3; i++) {
-                              ctx.beginPath();
-                              const offset = i * (Math.PI * 2 / 3);
-                              const cx = canvas.width * 0.5 + Math.cos(t * 0.4 + offset) * 300;
-                              const cy = canvas.height * 0.5 + Math.sin(t * 0.3 + offset) * 200;
-                              const endX = cx + Math.cos(t * 0.6 + offset) * 400;
-                              const endY = cy + Math.sin(t * 0.5 + offset) * 300;
-
-                              ctx.moveTo(cx, cy);
-                              ctx.quadraticCurveTo(
-                                          cx + Math.cos(t * 0.5) * 200,
-                                          cy + Math.sin(t * 0.4) * 150,
-                                          endX,
-                                          endY
-                                        );
-                              ctx.stroke();
-                    }
-
-                    ctx.globalAlpha = 1;
-                    requestAnimationFrame(drawGrayscaleNebula);
-            }
-
-            navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-            })
-                  .then(stream => {
-                          video.srcObject = stream;
-                          video.play().catch(e => console.error(e));
-
-                          animating = true;
-                          drawGrayscaleNebula();
-
-                          setTimeout(() => { loading.classList.add('hidden'); }, 1500);
-                  })
-                  .catch(error => {
-                          console.error(error);
-                          loading.innerHTML = '<p style="color:#ff6666; font-size:16px; padding:20px;">Camera access denied.</p>';
-                  });
-      </script>
-
-</body>
-</html>html>
-</body></title>
-</head><!DOCTYPE html>
-<html lang="en">
-<head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-      <title>Remember Wall - AR</title>
-      <style>
-              * { margin:0; padding:0; }
-              html, body { width:100%; height:100%; background:#000; }
-              #container { position:fixed; inset:0; }
-              video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; }
-              svg { position:absolute; inset:0; width:100%; height:100%; z-index:2; }
-              #loading { position:fixed; inset:0; background:#0a0a0a; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
-              #loading.hidden { opacity:0; pointer-events:none; }
-            </style>
-</head>
-<body>
-    <div id="container">
-          <video id="video" autoplay playsinline muted></video>video>
-          <svg id="overlay" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
-                  <defs>
-                            <filter id="grayscale-turbulence">
-                                        <feTurbulence type="fractalNoise" baseFrequency="0.002" numOctaves="5" result="noise">
-                                                      <animate attributeName="baseFrequency" values="0.002;0.005;0.002" dur="25s" repeatCount="indefinite"/>
-                                        </feTurbulence>feTurbulence>
-                                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="120" xChannelSelector="R" yChannelSelector="G"/>
-                            </filter>filter>
-                            <radialGradient id="nebula1">
-                                        <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.4"/>
-                                        <stop offset="40%" style="stop-color:#cccccc;stop-opacity:0.2"/>
-                                        <stop offset="100%" style="stop-color:#000000;stop-opacity:0"/>
-                            </radialGradient>radialGradient>
-                            <radialGradient id="nebula2">
-                                        <stop offset="0%" style="stop-color:#999999;stop-opacity:0.3"/>
-                                        <stop offset="50%" style="stop-color:#555555;stop-opacity:0.15"/>
-                                        <stop offset="100%" style="stop-color:#000000;stop-opacity:0"/>
-                            </radialGradient>radialGradient>
-                            <radialGradient id="nebula3">
-                                        <stop offset="0%" style="stop-color:#dddddd;stop-opacity:0.35"/>
-                                        <stop offset="45%" style="stop-color:#777777;stop-opacity:0.1"/>
-                                        <stop offset="100%" style="stop-color:#000000;stop-opacity:0"/>
-                            </radialGradient>radialGradient>
-                  </defs>
-
-                  <rect width="1920" height="1080" fill="#000"/>
-
-                  <!-- Large nebula cloud formations with turbulence -->
-                  <ellipse cx="960" cy="540" rx="700" ry="500" fill="url(#nebula1)" filter="url(#grayscale-turbulence)" opacity="0.5">
-                            <animate attributeName="rx" values="600;900;600" dur="20s" repeatCount="indefinite"/>
-                            <animate attributeName="ry" values="400;600;400" dur="22s" repeatCount="indefinite"/>
-                            <animate attributeName="opacity" values="0.3;0.6;0.3" dur="20s" repeatCount="indefinite"/>
-                  </ellipse>ellipse>
-
-                  <!-- Secondary nebula drifting -->
-                  <ellipse cx="300" cy="250" rx="500" ry="350" fill="url(#nebula2)" filter="url(#grayscale-turbulence)" opacity="0.35">
-                            <animate attributeName="cx" values="300;500;300" dur="25s" repeatCount="indefinite"/>
-                            <animate attributeName="cy" values="250;600;250" dur="28s" repeatCount="indefinite"/>
-                            <animate attributeName="rx" values="500;700;500" dur="25s" repeatCount="indefinite"/>
-                            <animate attributeName="opacity" values="0.2;0.5;0.2" dur="25s" repeatCount="indefinite"/>
-                  </ellipse>ellipse>
-
-                  <!-- Tertiary nebula floating -->
-                  <ellipse cx="1700" cy="800" rx="550" ry="400" fill="url(#nebula3)" filter="url(#grayscale-turbulence)" opacity="0.4">
-                            <animate attributeName="cx" values="1700;1400;1700" dur="27s" repeatCount="indefinite"/>
-                            <animate attributeName="cy" values="800;300;800" dur="30s" repeatCount="indefinite"/>
-                            <animate attributeName="ry" values="400;600;400" dur="27s" repeatCount="indefinite"/>
-                            <animate attributeName="opacity" values="0.25;0.55;0.25" dur="27s" repeatCount="indefinite"/>
-                  </ellipse>ellipse>
-
-                  <!-- Atmospheric clouds/wisps -->
-                  <path d="M 0,200 Q 200,100 400,150 T 800,200 T 1200,180 T 1600,220 T 1920,200 L 1920,400 Q 1600,350 1200,380 T 400,350 T 0,400 Z" 
-                                fill="#333333" opacity="0.2" filter="url(#grayscale-turbulence)">
-                            <animate attributeName="d" values="
-                                        M 0,200 Q 200,100 400,150 T 800,200 T 1200,180 T 1600,220 T 1920,200 L 1920,400 Q 1600,350 1200,380 T 400,350 T 0,400 Z;
-                                        M 0,180 Q 200,140 400,120 T 800,160 T 1200,140 T 1600,200 T 1920,180 L 1920,400 Q 1600,380 1200,360 T 400,380 T 0,400 Z;
-                                        M 0,200 Q 200,100 400,150 T 800,200 T 1200,180 T 1600,220 T 1920,200 L 1920,400 Q 1600,350 1200,380 T 400,350 T 0,400 Z
-                                      " dur="20s" repeatCount="indefinite"/>
-                  </path>path>
-
-                  <!-- Floating wisps -->
-                  <circle cx="500" cy="400" r="300" fill="#666666" opacity="0.15" filter="url(#grayscale-turbulence)">
-                            <animate attributeName="cy" values="400;600;200;400" dur="24s" repeatCount="indefinite"/>
-                            <animate attributeName="opacity" values="0.1;0.25;0.1" dur="24s" repeatCount="indefinite"/>
-                  </circle>circle>
-
-                  <circle cx="1400" cy="600" r="280" fill="#888888" opacity="0.12" filter="url(#grayscale-turbulence)">
-                            <animate attributeName="cy" values="600;300;700;600" dur="26s" repeatCount="indefinite"/>
-                            <animate attributeName="opacity" values="0.08;0.2;0.08" dur="26s" repeatCount="indefinite"/>
-                  </circle>circle>
-          </svg>svg>
-    </div>div>
-
-    <div id="loading">
-          <p style="color:#f0f0f0; font-size:28px; font-weight:bold; margin-bottom:20px;">Remember Wall</p>p>
-          <div style="width:60px; height:60px; border:2px solid #888; border-radius:50%; animation:spin 2s linear infinite;"></div>div>
-          <p style="color:#666; font-size:13px; margin-top:30px;">Opening camera...</p>p>
-          <style>@keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }</style>
-    </div>div>
-
-    <script>
-        const video = document.getElementById('video');
-        const loading = document.getElementById('loading');
-
-        navigator.mediaDevices.getUserMedia({
-              video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-        })
-            .then(stream => {
-                  video.srcObject = stream;
-                  video.play().catch(e => console.error(e));
-                  setTimeout(() => { loading.classList.add('hidden'); }, 1500);
-            })
-            .catch(error => {
-                  console.error(error);
-                  loading.innerHTML = '<p style="color:#ff6666; font-size:16px; padding:20px;">Camera access denied.</p>';
-            });
-    </script>
-
-</body>
-</html>html>
-                  </defs><!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Remember Wall - AR</title>
-  <style>
-      * { margin:0; padding:0; }
-      html, body { width:100%; height:100%; background:#000; }
-      #container { position:fixed; inset:0; }
-      video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; }
-      svg { position:absolute; inset:0; width:100%; height:100%; z-index:2; }
-      #loading { position:fixed; inset:0; background:#0a0a0a; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:9999; }
-      #loading.hidden { opacity:0; pointer-events:none; }
-    </style>
-</head>
-<body>
-  <div id="container">
-      <video id="video" autoplay playsinline muted></video>video>
-      <svg id="overlay" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
-            <defs>
-                    <filter id="turbulence">
-                              <feTurbulence type="fractalNoise" baseFrequency="0.003" numOctaves="4" result="noise" seed="2">
-                                          <animate attributeName="baseFrequency" values="0.003;0.008;0.003" dur="20s" repeatCount="indefinite"/>
-                              </feTurbulence>feTurbulence>
-                              <feDisplacementMap in="SourceGraphic" in2="noise" scale="80"/>
-                    </filter>filter>
-            </defs>
-            <rect width="1920" height="1080" fill="#000"/>
-            <circle cx="960" cy="540" r="600" fill="url(#radialGrad)" opacity="0.8" filter="url(#turbulence)">
-                    <animate attributeName="r" values="400;800;400" dur="15s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.4;0.8;0.4" dur="15s" repeatCount="indefinite"/>
-            </circle>circle>
-            <circle cx="400" cy="300" r="300" fill="#6600ff" opacity="0.3" filter="url(#turbulence)">
-                    <animate attributeName="cx" values="400;600;400" dur="12s" repeatCount="indefinite"/>
-                    <animate attributeName="cy" values="300;700;300" dur="14s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.2;0.5;0.2" dur="12s" repeatCount="indefinite"/>
-            </circle>circle>
-            <circle cx="1500" cy="800" r="350" fill="#00ccff" opacity="0.3" filter="url(#turbulence)">
-                    <animate attributeName="cx" values="1500;1300;1500" dur="16s" repeatCount="indefinite"/>
-                    <animate attributeName="cy" values="800;200;800" dur="18s" repeatCount="indefinite"/>
-                    <animate attributeName="opacity" values="0.2;0.5;0.2" dur="16s" repeatCount="indefinite"/>
-            </circle>circle>
-            <defs>
-                    <radialGradient id="radialGrad">
-                              <stop offset="0%" style="stop-color:#ffaa00;stop-opacity:0.5" />
-                              <stop offset="50%" style="stop-color:#6600ff;stop-opacity:0.3" />
-                              <stop offset="100%" style="stop-color:#00ccff;stop-opacity:0" />
-                    </radialGradient>radialGradient>
-            </defs>
-            <rect width="1920" height="1080" fill="none" stroke="url(#radialGrad)" stroke-width="2" opacity="0.6">
-                    <animate attributeName="stroke-width" values="1;4;1" dur="8s" repeatCount="indefinite"/>
-            </rect>rect>
-      </svg>svg>
-  </div>div>
-
-  <div id="loading">
-      <p style="color:#f0f0f0; font-size:28px; font-weight:bold; margin-bottom:20px;">Remember Wall</p>p>
-      <div style="width:60px; height:60px; border:2px solid #888; border-radius:50%; animation:spin 2s linear infinite;"></div>div>
-      <p style="color:#666; font-size:13px; margin-top:30px;">Opening camera...</p>p>
-      <style>@keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }</style>
-  </div>div>
-
-  <script>
-    const video = document.getElementById('video');
-    const loading = document.getElementById('loading');
-
-    navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-    })
-      .then(stream => {
-          video.srcObject = stream;
-          video.play().catch(e => console.error(e));
-          setTimeout(() => { loading.classList.add('hidden'); }, 1500);
-      })
-      .catch(error => {
-          console.error(error);
-          loading.innerHTML = '<p style="color:#ff6666; font-size:16px; padding:20px;">Camera access denied.</p>';
-      });
-  </script>
-
-</body>
-</html>html>
-            </defs>
-            </defs>
-</body></title>
-</head><!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Remember Wall - AR</title>
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: #000; }
-    #app { position: fixed; inset: 0; }
-    #video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-    a-scene { position: absolute !important; inset: 0 !important; z-index: 2 !important; }
-    #loading { position: fixed; inset: 0; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.8s; }
-    #loading.hidden { opacity: 0; pointer-events: none; }
-  </style>
-</head>
-<body>
-<div id="app">
-  <video id="video" autoplay playsinline muted></video>
-  <a-scene renderer="alpha: true;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-    <a-camera position="0 0 0"></a-camera>
-    <a-plane position="0 0 -2" width="4" height="5.33" material="shader: psychedelic; transparent: true; side: double;" geometry="primitive: plane;"></a-plane>
-  </a-scene>
-</div>
-
-<div id="loading">
-  <p style="color: #f0f0f0; font-size: 28px; font-weight: bold; margin-bottom: 20px;">Remember Wall</p>
-  <div style="width: 60px; height: 60px; border: 2px solid #888; border-radius: 50%; animation: spin 2s linear infinite;"></div>
-  <p style="color: #666; font-size: 13px; margin-top: 30px;">Opening camera...</p>
-  <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-</div>
-
-<script>
-AFRAME.registerShader('psychedelic', {
-  schema: { time: { type: 'time', is: 'uniform' } },
-  vertexShader: `
-    varying vec2 vUv;
-    void main() {
-      vUv = uv;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform float time;
-    varying vec2 vUv;
-
-    float hash(vec2 p) {
-      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-    }
-
-    float noise(vec2 p) {
-      vec2 i = floor(p);
-      vec2 f = fract(p);
-      f = f * f * (3.0 - 2.0 * f);
-      float n00 = hash(i);
-      float n10 = hash(i + vec2(1.0, 0.0));
-      float n01 = hash(i + vec2(0.0, 1.0));
-      float n11 = hash(i + vec2(1.0, 1.0));
-      float nx0 = mix(n00, n10, f.x);
-      float nx1 = mix(n01, n11, f.x);
-      return mix(nx0, nx1, f.y);
-    }
-
-    float fbm(vec2 p) {
-      float v = 0.0;
-      float a = 1.0;
-      float f = 1.0;
-      float m = 0.0;
-      for (int i = 0; i < 5; i++) {
-        v += a * noise(p * f);
-        m += a;
-        a *= 0.5;
-        f *= 2.0;
-      }
-      return v / m;
-    }
-
-    void main() {
-      vec2 uv = vUv;
-      float t = time * 0.0002;
-
-      float n1 = fbm(uv * 3.0 + vec2(t * 0.5, t * 0.3));
-      float n2 = fbm(uv * 2.0 + vec2(t * -0.4, t * 0.2));
-      
-      float wave = sin(uv.x * 8.0 + t * 2.0) * 0.5 + 0.5;
-      wave *= sin(uv.y * 6.0 - t * 1.5) * 0.5 + 0.5;
-      
-      float swirl = sin((uv.x - 0.5) * 12.0 - t * 1.8) * 0.3 + 0.3;
-      
-      float combined = n1 * 0.45 + n2 * 0.25 + wave * 0.2 + swirl * 0.1;
-      float lum = 0.2 + combined * 0.65;
-      lum *= 0.8 + 0.2 * sin(t * 0.8);
-      
-      float alpha = min(lum * 0.65, 1.0);
-      gl_FragColor = vec4(vec3(lum), alpha);
-    }
-  `
-});
-
-const video = document.getElementById('video');
-const loading = document.getElementById('loading');
-
-navigator.mediaDevices.getUserMedia({
-  video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-})
-.then(stream => {
-  video.srcObject = stream;
-  video.play().catch(e => console.error('Play error:', e));
+btn.onclick = function() {
+  btn.disabled = true;
+  btn.textContent = 'Starting...';
+  msg.textContent = '';
   
-  // Hide loading after 1.5 seconds (don't wait for metadata)
-  setTimeout(() => {
-    loading.classList.add('hidden');
-  }, 1500);
-})
-.catch(error => {
-  console.error('Camera error:', error);
-  loading.innerHTML = '<p style="color: #ff6666; font-size: 16px; padding: 20px;">Camera access denied. Please allow camera permission.</p>';
-});
+  navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}}).then(function(stream) {
+    video.srcObject = stream;
+    video.style.display = 'block';
+    ui.style.display = 'none';
+    animating = true;
+    animate();
+  }).catch(function(err) {
+    msg.textContent = 'Error: ' + err.name;
+    btn.disabled = false;
+    btn.textContent = 'Open Camera';
+  });
+};
 </script>
-
 </body>
 </html>
