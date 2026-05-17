@@ -2,36 +2,41 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Remember Wall - AR</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    * { margin:0; padding:0; }
-    html, body { width:100%; height:100%; background:#000; }
-    #loading { position:fixed; inset:0; background:#0a0a0a; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; }
-    #loading.hidden { opacity:0; }
-    #video { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; }
-    canvas { position:fixed; inset:0; z-index:2; }
-    a-scene { position:fixed !important; inset:0 !important; z-index:3 !important; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #loading { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+    #loading.hidden { display: none; }
+    #video { position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+    a-scene { position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; z-index: 2 !important; }
   </style>
 </head>
 <body>
 <div id="loading">
-  <p style="color:#f0e8d0; font-size:24px; text-transform:uppercase;">Remember Wall</p>
-  <p style="color:#666; font-size:12px; margin-top:40px;">Camera opening...</p>
+  <p style="color: #f0f0f0; font-size: 28px; font-weight: bold; margin-bottom: 20px;">Remember Wall</p>
+  <div style="width: 60px; height: 60px; border: 2px solid #888; border-radius: 50%; animation: spin 2s linear infinite;"></div>
+  <p style="color: #666; font-size: 13px; margin-top: 30px;">Activating camera...</p>
+  <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
 </div>
 
-<video id="video" autoplay playsinline muted></video>
-<canvas id="overlay"></canvas>
+<video id="video" autoplay playsinline muted style="display: block;"></video>
 
-<a-scene renderer="alpha: true;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
-  <a-camera position="0 0 0"></a-camera>
-  <a-plane position="0 0 -1.5" width="3.2" height="2.56" material="shader: nebula; transparent: true; side: double;"></a-plane>
+<a-scene renderer="alpha: true; logarithmicDepthBuffer: true" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" fog="type: linear; color: #000; near: 0.1; far: 1000">
+  <a-camera position="0 0 0" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
+  
+  <!-- Full screen animated plane -->
+  <a-plane id="nebula-plane" position="0 0 -3" width="10" height="13.3" material="shader: nebula-shader; transparent: true; side: double; blending: normal;" geometry="primitive: plane; segmentsWidth: 1; segmentsHeight: 1;"></a-plane>
 </a-scene>
 
 <script>
-AFRAME.registerShader('nebula', {
-  schema: { time: { type: 'time', is: 'uniform' } },
+// Register the psychedelic nebula shader
+AFRAME.registerShader('nebula-shader', {
+  schema: {
+    time: { type: 'time', is: 'uniform' }
+  },
   vertexShader: `
     varying vec2 vUv;
     void main() {
@@ -42,64 +47,115 @@ AFRAME.registerShader('nebula', {
   fragmentShader: `
     uniform float time;
     varying vec2 vUv;
-    
+
+    // Perlin-like noise function
     float hash(vec2 p) {
       return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
     }
-    
+
     float noise(vec2 p) {
       vec2 i = floor(p);
       vec2 f = fract(p);
       f = f * f * (3.0 - 2.0 * f);
-      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
-                 mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+      
+      float n00 = hash(i);
+      float n10 = hash(i + vec2(1.0, 0.0));
+      float n01 = hash(i + vec2(0.0, 1.0));
+      float n11 = hash(i + vec2(1.0, 1.0));
+      
+      float nx0 = mix(n00, n10, f.x);
+      float nx1 = mix(n01, n11, f.x);
+      return mix(nx0, nx1, f.y);
     }
-    
+
     float fbm(vec2 p) {
-      float v = 0.0;
-      float a = 0.5;
-      for (int i = 0; i < 6; i++) {
-        v += a * noise(p);
-        p *= 2.07;
-        a *= 0.5;
+      float value = 0.0;
+      float amplitude = 1.0;
+      float frequency = 1.0;
+      float maxValue = 0.0;
+
+      for (int i = 0; i < 5; i++) {
+        value += amplitude * noise(p * frequency);
+        maxValue += amplitude;
+        amplitude *= 0.5;
+        frequency *= 2.0;
       }
-      return v;
+
+      return value / maxValue;
     }
-    
+
     void main() {
       vec2 uv = vUv;
-      float t = time * 0.0005;
+      float t = time * 0.0002;
+
+      // Base noise with animation
+      float n1 = fbm(uv * 2.5 + vec2(t * 0.3, t * 0.2));
+      float n2 = fbm(uv * 1.8 + vec2(t * -0.25, t * 0.15));
+
+      // Waves flowing across screen
+      float wave1 = sin(uv.x * 6.0 + t * 1.5) * 0.5 + 0.5;
+      float wave2 = sin(uv.y * 5.0 - t * 1.2) * 0.5 + 0.5;
+      float waves = wave1 * wave2;
+
+      // Radial gradient for dreamy effect
+      float dist = length(uv - 0.5) * 1.5;
+      float radial = 1.0 - smoothstep(0.0, 1.5, dist);
+
+      // Diagonal stripes
+      float diagonal = sin((uv.x + uv.y) * 8.0 + t * 0.8) * 0.5 + 0.5;
+
+      // Combine everything
+      float combined = n1 * 0.4 + n2 * 0.2 + waves * 0.2 + diagonal * 0.15;
+      combined += radial * 0.05;
       
-      float n = fbm(uv * 2.5 + vec2(t * 0.5, t * 0.35));
-      float w1 = sin(uv.x * 10.0 + t * 2.0) * 0.5 + 0.5;
-      float w2 = sin(uv.y * 8.0 + t * 1.5) * 0.5 + 0.5;
-      float w = w1 * w2;
+      // Enhance with color variations
+      float lum = 0.2 + combined * 0.6;
+      lum *= 0.85 + 0.15 * sin(t * 0.5);
       
-      float lum = n * 0.6 + w * 0.4;
-      lum = 0.2 + lum * 0.6;
-      lum *= 0.8 + 0.2 * sin(t * 1.5);
-      
+      // Ensure the alpha is strong enough to show
       float alpha = min(lum * 0.65, 1.0);
+
       gl_FragColor = vec4(vec3(lum), alpha);
     }
   `
 });
 
+// Camera setup
 const video = document.getElementById('video');
 const loading = document.getElementById('loading');
 
-navigator.mediaDevices.getUserMedia({ 
-  video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
-})
-.then(stream => {
-  video.srcObject = stream;
-  video.play().catch(e => console.log('Play:', e));
-  setTimeout(() => { loading.classList.add('hidden'); }, 1200);
-})
-.catch(e => {
-  console.log('Camera error:', e);
-  loading.innerHTML = '<p style="color:#ff9999;">Camera access denied</p>';
+console.log('Starting camera...');
+
+// Request camera with explicit error handling
+const cameraPromise = navigator.mediaDevices.getUserMedia({
+  video: {
+    facingMode: 'environment',
+    width: { ideal: 1920 },
+    height: { ideal: 1080 }
+  }
 });
+
+cameraPromise
+  .then(stream => {
+    console.log('Camera stream started');
+    video.srcObject = stream;
+    
+    video.onloadedmetadata = () => {
+      console.log('Video loaded');
+      video.play().then(() => {
+        console.log('Video playing');
+        setTimeout(() => {
+          loading.classList.add('hidden');
+        }, 800);
+      }).catch(e => {
+        console.error('Play error:', e);
+      });
+    };
+  })
+  .catch(error => {
+    console.error('Camera error:', error);
+    loading.innerHTML = '<p style="color: #ff6666; font-size: 16px; text-align: center; padding: 20px;">Camera access denied.<br>Please allow camera permission in your browser settings.</p>';
+  });
 </script>
 
 </body>
