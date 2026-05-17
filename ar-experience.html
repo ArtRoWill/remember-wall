@@ -7,20 +7,22 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
     * { margin:0; padding:0; }
-    html, body { width:100%; height:100%; background:#000; overflow:hidden; }
+    html, body { width:100%; height:100%; background:#000; }
     #loading { position:fixed; inset:0; background:#0a0a0a; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:999; }
-    #loading.hidden { opacity:0; pointer-events:none; }
+    #loading.hidden { opacity:0; }
     #video { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; z-index:1; }
-    a-scene { position:fixed !important; inset:0 !important; z-index:2 !important; }
+    canvas { position:fixed; inset:0; z-index:2; }
+    a-scene { position:fixed !important; inset:0 !important; z-index:3 !important; }
   </style>
 </head>
 <body>
 <div id="loading">
   <p style="color:#f0e8d0; font-size:24px; text-transform:uppercase;">Remember Wall</p>
-  <p style="color:#666; font-size:12px; margin-top:40px;">Opening camera...</p>
+  <p style="color:#666; font-size:12px; margin-top:40px;">Camera opening...</p>
 </div>
 
 <video id="video" autoplay playsinline muted></video>
+<canvas id="overlay"></canvas>
 
 <a-scene renderer="alpha: true;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
   <a-camera position="0 0 0"></a-camera>
@@ -30,36 +32,54 @@
 <script>
 AFRAME.registerShader('nebula', {
   schema: { time: { type: 'time', is: 'uniform' } },
-  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
   fragmentShader: `
     uniform float time;
     varying vec2 vUv;
-    float hash(vec2 p) { 
-      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); 
+    
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
     }
-    float noise(vec2 p) { 
-      vec2 i = floor(p); 
-      vec2 f = fract(p); 
-      f = f * f * (3.0 - 2.0 * f); 
-      return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y); 
+    
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                 mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
     }
-    float fbm(vec2 p) { 
-      float v = 0.0; 
-      float a = 0.5; 
-      for(int i=0;i<6;i++){v+=a*noise(p);p*=2.07;a*=0.5;}
-      return v; 
+    
+    float fbm(vec2 p) {
+      float v = 0.0;
+      float a = 0.5;
+      for (int i = 0; i < 6; i++) {
+        v += a * noise(p);
+        p *= 2.07;
+        a *= 0.5;
+      }
+      return v;
     }
+    
     void main() {
       vec2 uv = vUv;
-      float t = time * 0.001;
+      float t = time * 0.0005;
+      
       float n = fbm(uv * 2.5 + vec2(t * 0.5, t * 0.35));
-      float w = sin(uv.x * 10.0 - t * 2.0) * 0.5 + 0.5;
-      w *= sin(uv.y * 8.0 - t * 1.5) * 0.5 + 0.5;
-      float d = sin((uv.x + uv.y) * 12.0 - t * 2.5) * 0.5 + 0.5;
-      float lum = n * 0.5 + w * 0.3 + d * 0.2;
-      lum = 0.1 + lum * 0.7;
-      lum *= 0.9 + 0.1 * sin(t * 1.5);
-      float alpha = lum * 0.60;
+      float w1 = sin(uv.x * 10.0 + t * 2.0) * 0.5 + 0.5;
+      float w2 = sin(uv.y * 8.0 + t * 1.5) * 0.5 + 0.5;
+      float w = w1 * w2;
+      
+      float lum = n * 0.6 + w * 0.4;
+      lum = 0.2 + lum * 0.6;
+      lum *= 0.8 + 0.2 * sin(t * 1.5);
+      
+      float alpha = min(lum * 0.65, 1.0);
       gl_FragColor = vec4(vec3(lum), alpha);
     }
   `
@@ -67,29 +87,19 @@ AFRAME.registerShader('nebula', {
 
 const video = document.getElementById('video');
 const loading = document.getElementById('loading');
-let cameraStarted = false;
 
-function startCamera() {
-  if(cameraStarted) return;
-  cameraStarted = true;
-  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-    .then(stream => {
-      video.srcObject = stream;
-      video.onloadedmetadata = () => {
-        video.play().then(() => {
-          setTimeout(() => { loading.classList.add('hidden'); }, 800);
-        }).catch(e => console.log('Play:', e));
-      };
-    })
-    .catch(e => {
-      console.log('Camera error:', e);
-      loading.innerHTML = '<p style="color:#ff9999;">Camera access needed</p>';
-    });
-}
-
-document.addEventListener('click', startCamera);
-document.addEventListener('touchstart', startCamera);
-window.addEventListener('load', () => { setTimeout(startCamera, 500); });
+navigator.mediaDevices.getUserMedia({ 
+  video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+})
+.then(stream => {
+  video.srcObject = stream;
+  video.play().catch(e => console.log('Play:', e));
+  setTimeout(() => { loading.classList.add('hidden'); }, 1200);
+})
+.catch(e => {
+  console.log('Camera error:', e);
+  loading.innerHTML = '<p style="color:#ff9999;">Camera access denied</p>';
+});
 </script>
 
 </body>
