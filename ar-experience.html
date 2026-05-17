@@ -1,6 +1,141 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Remember Wall - AR</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+      #container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+      #video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+      #ar-scene { position: absolute !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; z-index: 2 !important; }
+      #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; }
+      #loading.hidden { display: none; }
+    </style>
+</head>
+<body>
+  <div id="container">
+      <video id="video" autoplay playsinline muted style="display: block;"></video>video>
+      <a-scene id="ar-scene" renderer="alpha: true;" vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+            <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>a-camera>
+            <a-plane position="0 0 -2" width="4" height="5.33" material="shader: psychedelic; transparent: true; side: double; blending: normal;" geometry="primitive: plane; segmentsWidth: 2; segmentsHeight: 2;"></a-plane>a-plane>
+          </a-scene>a-scene>
+  </div>div>
+
+  <div id="loading">
+      <p style="color: #f0f0f0; font-size: 28px; font-weight: bold; margin-bottom: 20px;">Remember Wall</p>p>
+      <div style="width: 60px; height: 60px; border: 2px solid #888; border-radius: 50%; animation: spin 2s linear infinite;"></div>div>
+      <p style="color: #666; font-size: 13px; margin-top: 30px;">Activating camera...</p>p>
+      <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+  </div>div>
+
+  <script>
+    AFRAME.registerShader('psychedelic', {
+        schema: { time: { type: 'time', is: 'uniform' } },
+        vertexShader: `
+            varying vec2 vUv;
+                void main() {
+                      vUv = uv;
+                            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                                }
+                                  `,
+        fragmentShader: `
+            uniform float time;
+                varying vec2 vUv;
+
+                    float hash(vec2 p) {
+                          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+                              }
+
+                                  float noise(vec2 p) {
+                                        vec2 i = floor(p);
+                                              vec2 f = fract(p);
+                                                    f = f * f * (3.0 - 2.0 * f);
+                                                          float n00 = hash(i);
+                                                                float n10 = hash(i + vec2(1.0, 0.0));
+                                                                      float n01 = hash(i + vec2(0.0, 1.0));
+                                                                            float n11 = hash(i + vec2(1.0, 1.0));
+                                                                                  float nx0 = mix(n00, n10, f.x);
+                                                                                        float nx1 = mix(n01, n11, f.x);
+                                                                                              return mix(nx0, nx1, f.y);
+                                                                                                  }
+
+                                                                                                      float fbm(vec2 p) {
+                                                                                                            float v = 0.0;
+                                                                                                                  float a = 1.0;
+                                                                                                                        float f = 1.0;
+                                                                                                                              float m = 0.0;
+                                                                                                                                    for (int i = 0; i < 5; i++) {
+                                                                                                                                            v += a * noise(p * f);
+                                                                                                                                                    m += a;
+                                                                                                                                                            a *= 0.5;
+                                                                                                                                                                    f *= 2.0;
+                                                                                                                                                                          }
+                                                                                                                                                                                return v / m;
+                                                                                                                                                                                    }
+                                                                                                                                                                                    
+                                                                                                                                                                                        void main() {
+                                                                                                                                                                                              vec2 uv = vUv;
+                                                                                                                                                                                                    float t = time * 0.0002;
+                                                                                                                                                                                                    
+                                                                                                                                                                                                          float n1 = fbm(uv * 3.0 + vec2(t * 0.5, t * 0.3));
+                                                                                                                                                                                                                float n2 = fbm(uv * 2.0 + vec2(t * -0.4, t * 0.2));
+                                                                                                                                                                                                                      
+                                                                                                                                                                                                                            float wave = sin(uv.x * 8.0 + t * 2.0) * 0.5 + 0.5;
+                                                                                                                                                                                                                                  wave *= sin(uv.y * 6.0 - t * 1.5) * 0.5 + 0.5;
+                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                              float swirl = sin((uv.x - 0.5) * 12.0 - t * 1.8) * 0.3 + 0.3;
+                                                                                                                                                                                                                                                    
+                                                                                                                                                                                                                                                          float combined = n1 * 0.45 + n2 * 0.25 + wave * 0.2 + swirl * 0.1;
+                                                                                                                                                                                                                                                                float lum = 0.2 + combined * 0.65;
+                                                                                                                                                                                                                                                                      lum *= 0.8 + 0.2 * sin(t * 0.8);
+                                                                                                                                                                                                                                                                            
+                                                                                                                                                                                                                                                                                  float alpha = min(lum * 0.65, 1.0);
+                                                                                                                                                                                                                                                                                        gl_FragColor = vec4(vec3(lum), alpha);
+                                                                                                                                                                                                                                                                                            }
+                                                                                                                                                                                                                                                                                              `
+    });
+
+    const video = document.getElementById('video');
+    const loading = document.getElementById('loading');
+    const scene = document.getElementById('ar-scene');
+
+    console.log('Starting camera initialization...');
+
+    navigator.mediaDevices.getUserMedia({
+        video: {
+              facingMode: 'environment',
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+        }
+    })
+      .then(stream => {
+          console.log('Camera stream acquired');
+          video.srcObject = stream;
+
+          video.onloadedmetadata = () => {
+                console.log('Video metadata loaded');
+                video.play().then(() => {
+                        console.log('Video playing - hiding loading screen');
+                        setTimeout(() => {
+                                  loading.classList.add('hidden');
+                        }, 600);
+                }).catch(e => console.error('Video play error:', e));
+          };
+      })
+      .catch(error => {
+          console.error('Camera permission error:', error);
+          loading.innerHTML = '<p style="color: #ff6666; font-size: 16px; text-align: center; padding: 20px; max-width: 80%;">Camera access denied.\nPlease allow camera permission in your browser settings and refresh the page.</p>';
+      });
+  </script>
+</body>
+</html>html>
+</body></title>
+</head><!DOCTYPE html>
+<html lang="en">
+<head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Remember Wall - AR</title>
