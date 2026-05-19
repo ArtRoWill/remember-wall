@@ -6,46 +6,49 @@
 <title>Remember Wall</title>
 <style>
 body { margin:0; padding:0; width:100%; height:100vh; background:#000; font-family:Arial; overflow:hidden; }
-video { position:fixed; top:0; left:0; width:100%; height:100%; object-fit:cover; display:none; z-index:1; }
-canvas { position:fixed; top:0; left:0; width:100%; height:100%; z-index:2; }
-#ui { position:fixed; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; color:white; text-align:center; }
+canvas { position:fixed; top:0; left:0; width:100%; height:100%; display:block; }
+#ui { position:fixed; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:10; color:white; text-align:center; background:rgba(0,0,0,0.95); }
 h1 { font-size:36px; margin:0 0 40px 0; }
-button { padding:20px 60px; font-size:20px; background:#333; color:white; border:1px solid #666; cursor:pointer; border-radius:5px; }
-button:active { background:#555; }
-#msg { margin-top:30px; font-size:14px; color:#999; }
+button { padding:20px 60px; font-size:20px; background:#333; color:white; border:1px solid #666; cursor:pointer; border-radius:5px; margin:10px; }
+button:disabled { opacity:0.5; cursor:not-allowed; }
+#info { margin-top:20px; font-size:13px; color:#aaa; font-family:monospace; max-width:90%; line-height:1.6; }
 </style>
 </head>
 <body>
-<video id="video"></video>
 <canvas id="canvas"></canvas>
 <div id="ui">
   <h1>Remember Wall</h1>
   <button id="btn">Open Camera</button>
-  <div id="msg"></div>
+  <button id="demo">Demo Mode</button>
+  <div id="info"></div>
 </div>
 
 <script>
-let video = document.getElementById('video');
 let canvas = document.getElementById('canvas');
 let ctx = canvas.getContext('2d');
 let btn = document.getElementById('btn');
+let demoBtn = document.getElementById('demo');
 let ui = document.getElementById('ui');
-let msg = document.getElementById('msg');
+let info = document.getElementById('info');
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-function resize() {
+window.addEventListener('resize', function() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+});
+
+let video = null;
+let cameraActive = false;
+let demoMode = false;
+
+function log(text) {
+  info.innerHTML += text + '<br>';
+  console.log(text);
 }
-window.addEventListener('resize', resize);
 
-let animating = false;
-
-function animate() {
-  let t = Date.now() * 0.0001;
-  
+function drawNebula(t) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
@@ -74,28 +77,89 @@ function animate() {
   }
   
   ctx.globalAlpha = 1;
-  
-  if (animating) {
-    requestAnimationFrame(animate);
-  }
 }
 
-btn.onclick = function() {
-  btn.disabled = true;
-  btn.textContent = 'Starting...';
-  msg.textContent = '';
+function animate() {
+  let t = Date.now() * 0.0001;
   
-  navigator.mediaDevices.getUserMedia({video: {facingMode: 'environment'}}).then(function(stream) {
+  if (cameraActive && video && video.readyState === video.HAVE_ENOUGH_DATA) {
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } catch (e) {
+      log('DrawImage error: ' + e.message);
+      cameraActive = false;
+    }
+  } else if (!cameraActive && !demoMode) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  
+  drawNebula(t);
+  requestAnimationFrame(animate);
+}
+
+animate();
+
+demoBtn.onclick = function() {
+  demoMode = true;
+  demoBtn.style.display = 'none';
+  btn.style.display = 'none';
+  info.innerHTML = 'Demo Mode: Showing nebula animation only';
+};
+
+btn.onclick = async function() {
+  btn.disabled = true;
+  btn.textContent = 'Initializing...';
+  info.innerHTML = '';
+  
+  log('Creating video element...');
+  video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('autoplay', '');
+  video.setAttribute('muted', '');
+  log('Video element created');
+  log('Requesting camera access...');
+  
+  try {
+    let stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' },
+      audio: false
+    });
+    
+    log('Camera stream acquired!');
+    log('Stream active: ' + stream.active);
+    log('Video tracks: ' + stream.getVideoTracks().length);
+    
     video.srcObject = stream;
-    video.style.display = 'block';
-    ui.style.display = 'none';
-    animating = true;
-    animate();
-  }).catch(function(err) {
-    msg.textContent = 'Error: ' + err.name;
+    log('Stream set to video element');
+    
+    video.onloadedmetadata = function() {
+      log('Video metadata loaded');
+      log('Video size: ' + video.videoWidth + 'x' + video.videoHeight);
+    };
+    
+    video.onplay = function() {
+      log('VIDEO IS PLAYING! Camera active!');
+      info.innerHTML = '<span style="color:#0f0;">✓ Camera streaming</span>';
+      ui.style.display = 'none';
+      cameraActive = true;
+    };
+    
+    video.onerror = function(e) {
+      log('Video element error: ' + e);
+    };
+    
+    log('Attempting to play video...');
+    await video.play();
+    log('Play command sent');
+    
+  } catch (err) {
+    log('ERROR: ' + err.name);
+    log('Message: ' + err.message);
     btn.disabled = false;
     btn.textContent = 'Open Camera';
-  });
+    demoBtn.style.display = 'block';
+  }
 };
 </script>
 </body>
